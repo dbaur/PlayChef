@@ -24,6 +24,7 @@ include_recipe 'zip'
 install_user          = "#{node[:play_app][:installation_user]}"
 application_name      = "#{node[:play_app][:application_name]}"
 dist_url              = "#{node[:play_app][:dist_url]}"
+dist_name             = "#{node[:play_app][:dist_name]}"
 
 def uid_of_user(username)
   node['etc']['passwd'].each do |user, data|
@@ -86,7 +87,7 @@ end
 
 
 remote_file "#{installation_dir}/#{application_name}.zip" do
-  source "#{dist_url}"
+  source "#{dist_url}/#{dist_name}.zip"
   owner install_user
   group install_user
   mode "0644"
@@ -108,13 +109,15 @@ end
 #Create the Application Conf file
 #Add/remove variables here and in the application.conf.erb file as per your requirements e.g Database settings 
 
-template "#{config_dir}/application.conf" do
+template "#{config_dir}/prod.conf" do
   source "application.conf.erb"
   owner install_user
   group install_user
   variables({
                 :applicationSecretKey => "#{node[:play_app][:application_secret_key]}",
-                :applicationLanguage => "#{node[:play_app][:language]}"
+                :dbDriver => "#{node[:play_app][:db_driver]}",
+		:dbUrl => "#{node[:play_app][:db_url]}",
+		:cloudify => "#{node[:play_app][:cloudify_path]}"
             })
 end
 
@@ -143,10 +146,10 @@ template "/etc/init.d/#{application_name}" do
   variables({
                 :run_as =>  "#{install_user}",
                 :name => "#{application_name}",
-                :path => "#{installation_dir}/#{application_name}",
+                :path => "#{installation_dir}/#{dist_name}",
                 :pidFilePath => "#{node[:play_app][:pid_file_path]}",
-                :options => "-Dconfig.file=#{config_dir}/application.conf -Dpidfile.path=#{node[:play_app][:pid_file_path]} -Dlogger.file=#{config_dir}/logger.xml #{node[:play_app][:vm_options]}",
-                :command => "start"
+                :options => "-Dconfig.file=#{config_dir}/prod.conf -Dpidfile.path=#{node[:play_app][:pid_file_path]} -Dlogger.file=#{config_dir}/logger.xml #{node[:play_app][:vm_options]}",
+                :command => "bin/#{application_name}"
             })
 end
 

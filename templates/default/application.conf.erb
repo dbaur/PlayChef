@@ -1,5 +1,26 @@
-#Application Configuration File
+#Production Configuration File
 
+include "application.conf"
+
+# Secret key
+# ~~~~~
+# The secret key is used to secure cryptographics functions.
+# If you deploy your application to several instances be sure to use the same key!
 application.secret="<%=@applicationSecretKey%>"
 
-application.langs="<%=@applicationLanguage%>"
+# Database configuration
+# ~~~~~
+db.default.driver=<%=@dbDriver%>
+db.default.url="<%=@dbUrl%>"
+
+# Cloudify
+# ~~~~~
+#
+# Cloudify Path
+cloudify.path = "<%=@cloudify%>"
+# 
+# Cloudify Temp
+cloudify.temp = "/tmp"
+#
+# Safe Files
+cloudify.safe = true
