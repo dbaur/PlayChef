@@ -151,7 +151,7 @@ template "#{config_dir}/prod.conf" do
                 :applicationSecretKey => "#{node[:play_app][:application_secret_key]}",
                 :dbDriver => "com.mysql.jdbc.Driver",
 		:dbUrl => "#{database_url}",
-		:cloudify => " #{cloudify_dir}/#{node[:play_app][:cloudify_release]}"
+		:cloudify => " #{cloudify_dir}/#{node[:play_app][:cloudify_name]}"
             })
 end
 
@@ -164,8 +164,7 @@ template "#{config_dir}/logger.xml" do
   variables({
                 :configDir => "#{config_dir}",
                 :appName => "#{application_name}",
-                :maxHistory => "#{node[:play_app][:max_logging_history]}",
-                :playloggLevel => "#{node[:play_app][:play_log_level]}",
+                :playLogLevel => "#{node[:play_app][:play_log_level]}",
                 :applicationLogLevel => "#{node[:play_app][:app_log_level]}"
             })
 end
