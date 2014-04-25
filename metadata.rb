@@ -8,6 +8,7 @@ version          '1.0.0'
 
 depends 'java'
 depends 'zip'
+depends 'database'
 
 supports 'debian'
 supports 'ubuntu'

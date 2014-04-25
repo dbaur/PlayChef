@@ -20,11 +20,15 @@
 # Modified_by:: Etienne Charlier (<etienne.charlier@cetic.be>)
 
 include_recipe 'zip'
+include_recipe 'database::mysql'
+include_recipe 'mysql::server'
+include_recipe 'java::oracle'
 
 install_user          = "#{node[:play_app][:installation_user]}"
 application_name      = "#{node[:play_app][:application_name]}"
 dist_url              = "#{node[:play_app][:dist_url]}"
 dist_name             = "#{node[:play_app][:dist_name]}"
+database_url	      = "mysql://#{node[:play_app][:dbUser]}:#{node[:play_app][:dbPass]}@localhost/#{node[:play_app][:dbName]}"
 
 def uid_of_user(username)
   node['etc']['passwd'].each do |user, data|
@@ -42,6 +46,12 @@ if node.attribute?('installation_dir')
   installation_dir      = "#{node[:play_app][:installation_dir]}"
 else
   installation_dir      = "/home/#{install_user}/#{application_name}/app"
+end
+
+if node.attribute?('cloudify_install_dir')
+  cloudify_dir		= "#{node[:play_app][:installation_dir]}"
+else
+  cloudify_dir		= "/home/#{install_user}/#{application_name}/app/cloudify"
 end
 
 if node.attribute?('config_dir')
@@ -84,12 +94,26 @@ directory "#{config_dir}" do
   recursive true
 end
 
-
+directory "#{cloudify_dir}" do
+  action :create
+  mode "0755"
+  owner "#{install_user}"
+  group "#{install_user}"
+  recursive true
+end
 
 remote_file "#{installation_dir}/#{application_name}.zip" do
   source "#{dist_url}/#{dist_name}.zip"
-  owner install_user
-  group install_user
+  owner "#{install_user}"
+  group "#{install_user}"
+  mode "0644"
+  action :create
+end
+
+remote_file "#{cloudify_dir}/#{node[:play_app][:cloudify_release]}.zip" do
+  source "#{node[:play_app][:cloudify_url]}/#{node[:play_app][:cloudify_release]}.zip"
+  owner "#{install_user}"
+  group "#{install_user}"
   mode "0644"
   action :create
 end
@@ -100,9 +124,19 @@ bash "unzip-#{application_name}" do
   code <<-EOH
     sudo rm -rf #{installation_dir}/#{application_name}
     sudo unzip #{installation_dir}/#{application_name}.zip
-    sudo chmod +x #{installation_dir}/#{application_name}/start
     sudo rm #{installation_dir}/#{application_name}.zip
     sudo chown -R #{install_user}:#{install_user} #{installation_dir}
+  EOH
+end
+
+#Unzip cloudify
+bash "unzip-#{node[:play_app][:cloudify_release]}" do
+  cwd "/#{cloudify_dir}"
+  code <<-EOH
+    sudo rm -rf #{cloudify_dir}/#{node[:play_app][:cloudify_release]}
+    sudo unzip #{cloudify_dir}/#{node[:play_app][:cloudify_release]}.zip
+    sudo rm #{cloudify_dir}/#{node[:play_app][:cloudify_release]}.zip
+    sudo chown -R #{install_user}:#{install_user} #{cloudify_dir}
   EOH
 end
 
@@ -115,9 +149,9 @@ template "#{config_dir}/prod.conf" do
   group install_user
   variables({
                 :applicationSecretKey => "#{node[:play_app][:application_secret_key]}",
-                :dbDriver => "#{node[:play_app][:db_driver]}",
-		:dbUrl => "#{node[:play_app][:db_url]}",
-		:cloudify => "#{node[:play_app][:cloudify_path]}"
+                :dbDriver => "com.mysql.jdbc.Driver",
+		:dbUrl => "#{database_url}",
+		:cloudify => " #{cloudify_dir}/#{node[:play_app][:cloudify_release]}"
             })
 end
 
@@ -129,7 +163,7 @@ template "#{config_dir}/logger.xml" do
   group install_user
   variables({
                 :configDir => "#{config_dir}",
-                :application_name => "#{application_name}",
+                :appName => "#{application_name}",
                 :maxHistory => "#{node[:play_app][:max_logging_history]}",
                 :playloggLevel => "#{node[:play_app][:play_log_level]}",
                 :applicationLogLevel => "#{node[:play_app][:app_log_level]}"
@@ -148,10 +182,36 @@ template "/etc/init.d/#{application_name}" do
                 :name => "#{application_name}",
                 :path => "#{installation_dir}/#{dist_name}",
                 :pidFilePath => "#{node[:play_app][:pid_file_path]}",
-                :options => "-Dconfig.file=#{config_dir}/prod.conf -Dpidfile.path=#{node[:play_app][:pid_file_path]} -Dlogger.file=#{config_dir}/logger.xml #{node[:play_app][:vm_options]}",
+                :options => "-Dconfig.file=#{config_dir}/prod.conf -Dpidfile.path=#{node[:play_app][:pid_file_path]} -Dlogger.file=#{config_dir}/logger.xml -DapplyEvolutions.default=true #{node[:play_app][:vm_options]}",
                 :command => "bin/#{application_name}"
             })
 end
+
+# create a database
+mysql_connection_info = {
+  :host     => 'localhost',
+  :username => 'root',
+  :password => node['mysql']['server_root_password']
+}
+
+mysql_database "#{node[:play_app][:dbName]}" do
+  connection mysql_connection_info
+  action :create
+end
+
+mysql_database_user "#{node[:play_app][:dbUser]}" do
+  connection mysql_connection_info
+  password "#{node[:play_app][:dbPass]}"
+  action :create
+end
+
+mysql_database_user "#{node[:play_app][:dbUser]}" do
+  connection    mysql_connection_info
+  password      "#{node[:play_app][:dbPass]}"
+  database_name "#{node[:play_app][:dbName]}"
+  action        :grant
+end
+
 
 service "#{application_name}" do
   supports :stop => true, :start => true, :restart => true
